@@ -1,0 +1,91 @@
+# docker-compose.prod.yml
+services:
+  frontend:
+    build: ./ai_frontend
+    container_name: nuxt_frontend
+    restart: always
+    env_file:
+      - ./ai_frontend/.env
+    depends_on:
+      - backend
+    # В проде порт 3000 наружу НЕ публикуем — ходим через nginx
+
+  backend:
+    build: ./ai_backend
+    container_name: ai_backend
+    restart: always
+    environment:
+      - PYTHONPATH=/app/app
+    env_file:
+      - ./ai_backend/.env
+    depends_on:
+      - db
+    volumes:
+      - ./ai_backend/static/uploads:/app/static/uploads
+    # В проде порт 8000 наружу НЕ публикуем
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips="*"
+
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword
+      POSTGRES_DB: appdb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # В проде БД не публикуем наружу
+    # ports: удалены
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:8081:8080"  # доступ только через SSH-туннель
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: always
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "127.0.0.1:3001:3000"  # доступ только через SSH-туннель
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_proxy
+    restart: always
+    depends_on:
+      - backend
+      - frontend
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+      - ./ai_backend/static/uploads:/var/www/uploads:ro
+    ports:
+      - "80:80"
+      - "443:443"
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    entrypoint: /bin/sh
+    command: >
+      -c "trap exit TERM;
+          while :; do
+            certbot renew --webroot -w /var/www/certbot;
+            sleep 12h & wait $${!};
+          done;"
+
+volumes:
+  db_data:

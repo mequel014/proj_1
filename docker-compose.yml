@@ -1,0 +1,123 @@
+version: "3.9"
+
+services:
+  # === Бэкенд (FastAPI) ===
+  backend:
+    build: ./ai_backend
+    container_name: ai_backend
+    restart: always
+    environment:
+      - PYTHONPATH=/app/app
+    env_file:
+      - ./ai_backend/.env
+    depends_on:
+      - db
+      - mailhog
+    volumes:
+      - ./ai_backend/static/uploads:/app/static/uploads
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # === Фронтенд (Nuxt3) ===
+  frontend:
+    build: ./ai_frontend
+    container_name: nuxt_frontend
+    restart: always
+    volumes:
+      - ./ai_frontend:/app
+      - /app/node_modules     # сохраняем node_modules из контейнера
+    env_file:
+      - ./ai_frontend/.env
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    command: npm run dev
+
+  # === PostgreSQL ===
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword
+      POSTGRES_DB: appdb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+  adminer:
+    image: adminer
+    container_name: adminer
+    restart: always
+    ports:
+      - "8081:8080"
+    depends_on:
+      - db
+
+  # === Mailhog (почтовый клиент) ===
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mailhog
+    restart: always
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+
+  # === Nginx + Let's Encrypt ===
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_proxy
+    restart: always
+    depends_on:
+      - backend
+      - frontend
+    volumes:
+      - ./ai_backend/static/uploads:/var/www/uploads:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+      - ./nginx/certs:/etc/nginx/certs:ro
+    ports:
+      - "80:80"
+      - "443:443"
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    entrypoint: /bin/sh
+    command: >
+      -c "trap exit TERM;
+          while :; do
+            certbot renew --webroot -w /var/www/certbot;
+            sleep 12h & wait $${!};
+          done;"
+
+  # === Prometheus ===
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    restart: always
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  # === Grafana ===
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: always
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3001:3000"  # графана UI
+
+volumes:
+  db_data:

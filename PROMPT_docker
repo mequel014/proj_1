@@ -1,0 +1,134 @@
+Бекенд:
+
+ai_backend/
+
+.
+├─ .env                         # ваши секреты и настройки (пример ниже)
+├─ app/
+│  ├─ main.py                   # точка входа FastAPI
+│  ├─ config.py                 # настройки (Yandex LLM, БД, JWT), адаптировано под ваш config.py
+│  ├─ models/                   # модели БД (SQLModel)
+│  │  ├─ __init__.py
+│  │  ├─ user.py
+...
+│  ├─ schemas/                  # pydantic-схемы запросов/ответов
+│  │  ├─ __init__.py
+│  │  ├─ auth.py
+...
+│  ├─ routers/                  # роутеры (эндпоинты)
+│  │  ├─ __init__.py
+│  │  ├─ auth.py
+...
+│  └─ utils/                    # утилиты: БД, безопасность, "почта" и зависимости
+│     ├─ __init__.py
+│     ├─ db.py
+...
+└─ static/
+   └─ uploads/                  # сюда можно класть загруженные картинки
+
+
+- Регистрация:
+```
+curl -X POST http://127.0.0.1:8000/auth/request-signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com"}'
+# Скопируйте token из лога и:
+curl -X POST http://127.0.0.1:8000/auth/complete-signup \
+  -H "Content-Type: application/json" \
+  -d '{"token":"<TOKEN_FROM_LOG>","password":"pass123","username":"user1"}'
+```
+
+- Логин:
+```
+curl -X POST http://127.0.0.1:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"login":"user@example.com","password":"pass123"}'
+# получите access_token
+```
+
+- Создать персонажа:
+```
+curl -X POST http://127.0.0.1:8000/characters \
+  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name":"Alice",
+        "gender":"female",
+        "photo_url":"/static/uploads/alice.png",
+        "bio":"Легкая ирония, любит шахматы",
+        "context":"Ты — Алиса, сидишь в уютной кофейне и думаешь о следующей книге...",
+        "interests":["chess","books","coffee"],
+        "rating":9.1,
+        "is_public": true
+      }'
+```
+
+- Начать диалог:
+```
+curl -X POST http://127.0.0.1:8000/dialogs/1/messages \
+  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Привет! О чем думаешь?"}'
+```
+
+- Продолжить диалог:
+```
+curl -X POST http://127.0.0.1:8000/dialogs/1/messages \
+  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"А давай сыграем в шахматы?", "dialog_id": 5}'
+```
+.env
+LANGSMITH_API=lsv2_pt_c7327a553453453453c4b9904daadd9f6461_0f67a91919
+LANGSMITH_PROJECT=pr-dear-descent-40
+
+API_KEY=AQVNya1Fcneh456456456468BzEOR9jVodAWsp8KC
+FOLDER_ID=b1g8p5675675671r1ns0u60k
+BASE_URL=https://llm.api.cloud.yandex.net/v1
+TEMPERATURE=0.6
+
+GROQ_API_KEY=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
+
+# База (локальная SQLite)
+DATABASE_URL=sqlite:///./app.db
+DB_ECHO=false
+
+# JWT
+JWT_SECRET=change-me-to-long-random-string
+ACCESS_TOKEN_EXPIRE_MINUTES=120
+
+
+Фронтенд:
+
+- assets/css/bulma.min.css  ← положите сюда bulma
+- assets/css/custom.css
+- components/
+  - AppNavbar.vue
+  ...
+- middleware/
+  - auth.js
+  - admin.js
+- pages/
+  - index.vue
+  - login.vue
+  - signup/index.vue
+  - signup/complete.vue
+  ...
+- plugins/
+  - api.client.js
+- stores/
+  - auth.js
+...
+- nuxt.config.js
+
+.env
+NUXT_PUBLIC_API_BASE=http://localhost:8000
+
+Сделай мне docker_compose для развертывания проекта
+Добавь туда:
+- контейнер с postgresql
+- контейнер почтовый клиент для регистрации
+- nginx с автоматическим созданием сертификатов
+- контейнер с Prometheus Graphana для мониторинга
+
+Сделай описание для Readme.md

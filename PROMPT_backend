@@ -1,0 +1,94 @@
+Я хочу сделать веб приложение для общения пользователей с llm. llm подключается по api с использованием библиотеки langchain 
+
+config.py такой:
+
+import os
+from dotenv import load_dotenv
+from functools import lru_cache
+from typing import Optional
+
+from langchain_openai import ChatOpenAI
+
+load_dotenv()
+
+class Settings:
+    # Yandex LLM
+    API_KEY: str = os.getenv("API_KEY", "")
+    FOLDER_ID: str = os.getenv("FOLDER_ID", "")
+    BASE_URL: str = os.getenv("BASE_URL", "https://llm.api.cloud.yandex.net/foundationModels/v1")
+    TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.2"))
+
+    # LangSmith (опционально)
+    LANGSMITH_API: str = os.getenv("LANGSMITH_API", "")
+    LANGSMITH_PROJECT: str = os.getenv("LANGSMITH_PROJECT", "")
+
+    # Database
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./app.db")
+    DB_ECHO: bool = os.getenv("DB_ECHO", "false").lower() == "true"
+
+
+    # Маппинг имён моделей (если захотите расширять)
+    MODEL_NAMES = {
+        'lite': 'yandexgpt-lite',
+        'pro': 'yandexgpt',
+        'pro_32k': 'yandexgpt-32k',
+    }
+
+    def model_name(self, model_id: str) -> str:
+        """
+        Собирает строку модели в формате gpt://<folder>/<model>/latest
+        """
+        return f"gpt://{self.FOLDER_ID}/{self.MODEL_NAMES[model_id]}/latest"
+
+    @lru_cache()
+    def create_yandex_model(self, model_id: str = "lite", temperature: Optional[float] = None) -> ChatOpenAI:
+        """
+        Создаёт (и кеширует) LLM-клиент для YandexGPT через langchain_openai
+        """
+        if temperature is None:
+            temperature = self.TEMPERATURE
+
+        llm = ChatOpenAI(
+            api_key=self.API_KEY,
+            base_url=self.BASE_URL,
+            model=self.model_name(model_id),
+            temperature=temperature,
+        )
+        return llm
+
+settings = Settings()
+
+# Настройка переменных для LangSmith (если нужно)
+if settings.LANGSMITH_API:
+    os.environ["LANGSMITH_TRACING"] = "true"
+    os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API
+if settings.LANGSMITH_PROJECT:
+    os.environ["LANGSMITH_PROJECT"] = settings.LANGSMITH_PROJECT
+
+На фронтенде планируется следующий функционал:
+- пользователь регистрируется по ссылке на почту
+- Пользователь может создавать себе bio и описание
+- логинится по логину и паролю (jwt токен)
+- после того, как он заходит он видит карточки персонажей: фото, пол, имя, интересы (как теги), рейтинг (напр. 7.7, 9.9) 
+- после нажатия на персонажа он переходит в окно чата, где строка ввода располагается внизу. Самое первое сообщение будет описывать контекст: обстановку, в которой находится персонаж, о чем он думает, и т.д.
+- Когда пользователь пишет первое сообщение, начинается диалог, который сохраняется в базу данных
+- Также пользователь может создавать персонажа: вводить фото, пол, имя, интересы (как теги), описание контекста, которое пишется в самом начале диалога, а также значок: private (может общаться только он) или public (могут видеть все)
+
+В Админке 
+- В главном меню суперпользователь видит всех пользователей, количество диалогов, количество созданных персонажей
+- в детальном меню пользователя видно дату регистрации, список созданных персонажей, короткий список диалогов: дату, имя персонажа
+- Если нажать на диалог из списка, откроется детальный диалог в виде чата
+- Администратор должен иметь возможноть блокировать пользователя или отдельных персонажей
+
+Сделай бекенд сервер на fastapi 
+База данных локальная в папке проекта sqlite. Библиотека для базы данных - sqlmodel. 
+
+1. В папке models должны располагаться файлы моделей, и т.д.
+2. В папке schemas должны располагаться файлы схем, и т.д.
+3. В папке routers роутеры аналогично
+4. Вспомогательные функции, если они есть, должны быть в папке utils
+
+Остальная организация на твое усмотрение, главное, чтобы было удобно масштабировать и работать с проектом. Не используй сложных конструкций и библиотек. Я знаю fastapi базово. Мне пока нужен простой проект, чтобы не пришлось его долго рефракторить
+Проект должен запускаться так: pip install "fastapi[standard]", а не через unicorn
+Напиши ответ в виде файла Readme.md так, чтобы по ходу переноса кода я понимал, что означает каждый файл.
+
